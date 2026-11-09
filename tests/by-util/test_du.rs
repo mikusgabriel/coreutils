@@ -773,6 +773,44 @@ fn test_du_dereference_args() {
     result.stdout_contains("0\tsublink\n");
 }
 
+#[test]
+#[cfg(unix)]
+fn test_du_symlink_dir_operand_trailing_slash() {
+    let ts = TestScenario::new(util_name!());
+    let at = &ts.fixtures;
+
+    at.mkdir("dir");
+    at.write("dir/file", "content");
+    at.symlink_dir("dir", "link");
+
+    // A trailing slash resolves the directory symlink even with -P.
+    // Count inodes so the expected total does not depend on filesystem allocation.
+    for args in [
+        &[][..],
+        &["-D"][..],
+        &["-H"][..],
+        &["-L"][..],
+        &["-P"][..],
+        &["-x"][..],
+        &["--time"][..],
+    ] {
+        ts.ucmd()
+            .args(args)
+            .args(&["--inodes", "-s", "link/"])
+            .succeeds()
+            .no_stderr()
+            .stdout_contains("2\t")
+            .stdout_contains("\tlink/\n");
+    }
+
+    ts.ucmd()
+        .args(&["--inodes", "-a", "link/"])
+        .succeeds()
+        .no_stderr()
+        .stdout_contains("1\tlink/file\n")
+        .stdout_contains("2\tlink/\n");
+}
+
 #[cfg(target_vendor = "apple")]
 fn du_dereference(s: &str) {
     assert_eq!(s, "4\tsubdir/links/deeper_dir\n16\tsubdir/links\n");

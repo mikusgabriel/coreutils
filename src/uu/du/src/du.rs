@@ -391,6 +391,12 @@ fn safe_du(
     parent_fd: Option<&DirFd>,
     initial_stat: Option<io::Result<Stat>>,
 ) -> Result<Stat, Box<mpsc::SendError<UResult<StatPrintInfo>>>> {
+    let operand_symlink_behavior = if options.dereference == Deref::None {
+        SymlinkBehavior::NoFollow
+    } else {
+        SymlinkBehavior::Follow
+    };
+
     // The caller provides an already-computed stat for this entry, which lets us
     // avoid re-stating it here. For subdirectories this saves both a redundant
     // `fstatat` and an expensive full-path `lstat` per directory (the dominant cost
@@ -413,7 +419,7 @@ fn safe_du(
         Err(_e) => {
             // Only the root path can reach this branch (subdirectories always pass a
             // valid stat). Try using our DirFd method for the root directory.
-            match DirFd::open(path, SymlinkBehavior::Follow) {
+            match DirFd::open(path, operand_symlink_behavior) {
                 Ok(dir_fd) => match Stat::new_from_dirfd(&dir_fd, path, options.time) {
                     Ok(s) => s,
                     Err(e) => {
@@ -452,9 +458,9 @@ fn safe_du(
     let open_result = match parent_fd {
         Some(parent) => parent.open_subdir(
             path.file_name().unwrap_or(path.as_os_str()),
-            SymlinkBehavior::Follow,
+            SymlinkBehavior::NoFollow,
         ),
-        None => DirFd::open(path, SymlinkBehavior::Follow),
+        None => DirFd::open(path, operand_symlink_behavior),
     };
 
     let dir_fd = match open_result {
